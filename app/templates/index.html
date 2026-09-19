@@ -1,4 +1,6 @@
 <!doctype html>
+<html lang="ja">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kurage 合意点マップ — 割れている点と、それでも一致する点を出す</title>
@@ -6,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+</head>
+<body>
 <div class="wrap">
 <p class="kick">CONSENSUS MAP</p>
 <h1>割れている点と、それでも一致する点</h1>
@@ -34,3 +38,5 @@ fetch('api/topics').then(r=>r.json()).then(d=>{
     </div>`).join('') : '<p class="note">まだありません。</p>';
 });
 </script>
+</body>
+</html>
