@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>合意点マップ｜賛否を押すと、意見の割れ方と一致点が見えます</title>
+<meta name="description" content="国会の実発言とニュースへの反応から立てた論点に、賛成・反対を押していく画面です。票が集まると、意見のグループと、立場が違っても一致する点が出ます。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../style.css">
+<div class="wrap">
+<p class="crumb"><a href="../../">Kurage 合意点マップ</a> ／ <span id="cr">…</span></p>
+<p class="kick">CONSENSUS MAP</p>
+<h1 id="name">…</h1>
+<p class="lead" id="lead"></p>
+
+<div class="panel">
+  <h3>この画面がしていること／していないこと</h3>
+  <p class="note" style="margin:0"><b>論点は、国会の実際の発言と、ニュースへの反応から立てています。</b>
+  言い換えはAIがしていますが、意見の中身は作っていません。下の「出典」に、誰のいつの発言かと会議録リンクを出しています。
+  <b>合成した票は一切混ぜていません。</b>票が足りないうちは、数字を出さずに「足りない」と書きます。</p>
+</div>
+
+<div class="prog noprint"><span class="num"><b id="done">0</b> / <span id="tot">0</span> 問に回答　—　押すとすぐ保存されます。あとから変えられます。</span></div>
+
+<div id="list"></div>
+
+<h2>いまの結果</h2>
+<div id="res" class="panel"><p class="note" style="margin:0">読み込み中…</p></div>
+
+<h2>出典</h2>
+<p class="note" id="evn"></p>
+<details><summary class="note" style="cursor:pointer;padding:8px 0">出典をすべて開く（国会会議録の発言と、元になったニュース）</summary>
+<div id="ev"></div>
+</details>
+
+<p class="note" style="margin-top:22px">合意点の計算は Pol.is と同じ筋（賛否行列→主成分分析→意見グループ→グループをまたいだ賛成率）ですが、Pol.is 本体（AGPL-3.0）は使わず自前で実装しています。氏名もIPも保存していません。</p>
+</div>
+<script>
+const slug = location.pathname.replace(/\/$/,'').split('/').pop();
+const $ = s => document.querySelector(s);
+const esc = t => String(t==null?'':t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = v => v==null ? '—' : Math.round(v*100)+'%';
+
+async function load(){
+  const d = await (await fetch('../../api/topic/'+slug)).json();
+  $('#name').textContent = d.topic.name;
+  $('#cr').textContent = d.topic.name;
+  $('#lead').textContent = d.topic.lead || '';
+  $('#tot').textContent = d.total;
+  $('#done').textContent = d.voted;
+  $('#list').innerHTML = d.statements.map(s => `
+    <div class="stmt" data-id="${s.id}">
+      <span class="tag ${s.origin==='diet'?'diet':'public'}">${s.origin==='diet'?'国会の発言から':'ニュースへの反応から'}</span>
+      <p class="q">${esc(s.text)}</p>
+      ${s.basis?`<p class="b">もとにしたもの: ${esc(s.basis)}</p>`:''}
+      <div class="vote">
+        <button class="ag${s.my_vote===1?' on':''}" data-v="1">賛成</button>
+        <button class="no${s.my_vote===-1?' on':''}" data-v="-1">反対</button>
+        <button class="pa${s.my_vote===0?' on':''}" data-v="0">保留</button>
+      </div>
+    </div>`).join('');
+  const nd = d.evidence.filter(e=>e.kind==='diet').length, nn = d.evidence.length - nd;
+  $('#evn').textContent = `国会会議録の発言 ${nd}件と、元になったニュース ${nn}件から論点を立てています。`;
+  $('#ev').innerHTML = d.evidence.map(e => `
+    <div class="ev"><b>${esc(e.who)}</b> <span>${esc(e.affiliation||'')} ${esc(e.date||'')}</span><br>
+    ${esc(e.body)}<br>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">${e.kind==='diet'?'会議録を見る':'記事と反応を見る'}</a>`:''}</div>`).join('');
+  document.querySelectorAll('.stmt .vote button').forEach(b => b.onclick = () => send(b));
+  result();
+}
+
+async function send(b){
+  const card = b.closest('.stmt');
+  card.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  const r = await fetch('../../api/topic/'+slug+'/vote', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({statement_id: +card.dataset.id, value: +b.dataset.v})});
+  const d = await r.json();
+  if(d.voted!=null) $('#done').textContent = d.voted;
+  result();
+}
+
+async function result(){
+  const d = await (await fetch('../../api/topic/'+slug+'/result')).json();
+  let h = `<p class="num">${d.n_voters}人が ${d.n_votes}票を入れています。</p>`;
+  if(d.n_groups==null){
+    h += `<p class="note" style="margin:.4em 0 0">${esc(d.note||'意見グループはまだ出せません。')}</p>`;
+  }else{
+    h += `<p class="note" style="margin:.4em 0 0">意見は <b>${d.n_groups}つのグループ</b>に分かれました。</p>`;
+    if(d.consensus_top.length){
+      h += `<h3 style="margin:16px 0 .3em">立場が違っても、一致した点</h3>
+        <div class="scroll"><table class="gt"><tr><th>論点</th><th>どのグループから見ても賛成</th></tr>`
+        + d.consensus_top.map(s=>`<tr><td>${esc(s.text)}</td><td>${pct(s.consensus)}</td></tr>`).join('')
+        + `</table></div>`;
+      h += `<h3 style="margin:16px 0 .3em">割れている点</h3>
+        <div class="scroll"><table class="gt"><tr><th>論点</th><th>グループ間の開き</th></tr>`
+        + d.divisive_top.map(s=>`<tr><td>${esc(s.text)}</td><td>${pct(s.divisive)}</td></tr>`).join('')
+        + `</table></div>`;
+    }
+  }
+  h += `<h3 style="margin:18px 0 .3em">論点ごとの票</h3>` + d.statements.map(s=>{
+    if(!s.votes) return `<p class="num" style="margin:.5em 0">${esc(s.text)} — ${esc(s.note||'票がありません')}</p>`;
+    const t=s.votes;
+    return `<div style="margin:.7em 0">
+      <div class="num">${esc(s.text)}</div>
+      <div class="bar"><i class="a" style="width:${s.agree/t*100}%"></i><i class="p" style="width:${s.pass/t*100}%"></i><i class="d" style="width:${s.disagree/t*100}%"></i></div>
+      <div class="num">賛成${s.agree}・保留${s.pass}・反対${s.disagree}${s.note?`（${esc(s.note)}）`:''}</div></div>`;
+  }).join('');
+  $('#res').innerHTML = h;
+}
+load();
+</script>

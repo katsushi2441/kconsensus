@@ -1,0 +1,10 @@
+*.bak
+*.bak-*
+*.env
+*.pyc
+.env
+.env.*
+.venv/
+__pycache__/
+data/*.sqlite
+outputs/

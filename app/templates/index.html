@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kurage 合意点マップ — 割れている点と、それでも一致する点を出す</title>
+<meta name="description" content="国会の実発言とニュースへの反応から論点を立て、賛否を集めて、意見のグループと合意点を出します。Pol.is と同じ筋の計算を自前で実装しています。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<div class="wrap">
+<p class="kick">CONSENSUS MAP</p>
+<h1>割れている点と、それでも一致する点</h1>
+<p class="lead">賛成・反対を集めるだけなら多数決です。この画面は、<b>意見がどう割れているかを先に見つけて、その割れた人たちが<u>そろって賛成した点</u>を出します</b>。合意できる場所は、平均のまん中ではなく、そこにあります。</p>
+
+<div class="panel">
+  <h3>材料は作っていません</h3>
+  <p class="note" style="margin:0">論点は、<b>国会会議録の実際の発言</b>と、<b>ニュースに寄せられた反応</b>から立てています。AI がするのは「賛否を押せる1文に言い換える」ことだけで、意見の中身は作りません。誰のいつの発言かは、各ページの出典に会議録リンク付きで出します。<b>合成した票は混ぜません。</b></p>
+</div>
+
+<h2>いまある論点</h2>
+<div id="list"><p class="note">読み込み中…</p></div>
+
+<h2>数え方</h2>
+<p class="note">賛否の行列を主成分分析で2次元に落とし、k-means で意見グループに分けます。合意スコアは<b>どのグループから見ても賛成が高いか</b>（最小値）で測るので、1つのグループだけが強く推している文は上位に来ません。人数や票数が足りないときは、数字を出さずに「足りない」と書きます。</p>
+<p class="note">Pol.is と同じ筋ですが、本体（AGPL-3.0）は使わず自前で実装しています。氏名もIPも保存していません。投票の識別は cookie の乱数だけです。</p>
+</div>
+<script>
+const esc = t => String(t==null?'':t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+fetch('api/topics').then(r=>r.json()).then(d=>{
+  document.querySelector('#list').innerHTML = d.topics.length ? d.topics.map(t=>`
+    <div class="stmt">
+      <p class="q"><a href="t/${esc(t.slug)}/">${esc(t.name)}</a></p>
+      <p class="b">${esc(t.lead||'')}</p>
+      <p class="num">論点${t.statements}件・これまでの票${t.votes}</p>
+    </div>`).join('') : '<p class="note">まだありません。</p>';
+});
+</script>
