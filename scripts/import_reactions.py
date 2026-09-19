@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT))
 from app.store import connect, init_db, init_reactions  # noqa: E402
 
 KMONTAGE_JOBS = os.environ.get("KCONSENSUS_KMONTAGE_JOBS", "/home/kojima/work/kmontage/storage/jobs")
-OLLAMA = os.environ.get("KCONSENSUS_OLLAMA", "http://192.168.0.3:11434")
+OLLAMA = os.environ.get("KCONSENSUS_OLLAMA", "http://127.0.0.1:11434")
 MODEL = os.environ.get("KCONSENSUS_MODEL", "gemma4:12b-it-qat")
 
 CRIT = {

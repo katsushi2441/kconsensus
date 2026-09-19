@@ -15,12 +15,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import re
 import urllib.request
 
 JEV = "http://127.0.0.1:18370/v1/systemone"
-OLLAMA = "http://192.168.0.3:11434/api/generate"
+OLLAMA = os.environ.get("KCONSENSUS_OLLAMA", "http://127.0.0.1:11434").rstrip("/") + "/api/generate"
+JEV = os.environ.get("KCONSENSUS_JEV", JEV)
 GEMMA = "gemma4:12b-it-qat"
 
 C0 = ("2年間だけ食料品の税率を1％に下げて、戻す時は現金給付で不満を抑えるというなら、"

@@ -33,7 +33,7 @@ GIIN_DB = os.environ.get("KCONSENSUS_GIIN_DB", "/home/kojima/work/xb4g/giin/data
 KMONTAGE_JOBS = os.environ.get("KCONSENSUS_KMONTAGE_JOBS", "/home/kojima/work/kmontage/storage/jobs")
 TRACKERS = os.environ.get("KCONSENSUS_TRACKERS", "/home/kojima/work/xb4g/giin/data/trackers.json")
 # 対話・単発処理の既定は 0.3 直叩き（0.14 は rqdb4ai 経由のときだけ）
-OLLAMA = os.environ.get("KCONSENSUS_OLLAMA", "http://192.168.0.3:11434")
+OLLAMA = os.environ.get("KCONSENSUS_OLLAMA", "http://127.0.0.1:11434")
 MODEL = os.environ.get("KCONSENSUS_MODEL", "gemma4:12b-it-qat")
 
 
