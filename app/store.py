@@ -50,3 +50,27 @@ def init_db() -> None:
     with c:
         c.executescript(DDL)
     c.close()
+
+
+REACTION_DDL = """
+-- ニュースに実際に寄せられた反応。**本文は投票対象にしない**が、
+-- 「この人はこの論点に賛成か反対か」を読み取るための元として持つ。
+-- 読み取り結果は推定なので、人が押した票（vote 表）とは必ず分けて扱う。
+CREATE TABLE IF NOT EXISTS reaction (
+  id INTEGER PRIMARY KEY, topic_id INTEGER, platform TEXT, author TEXT, text TEXT,
+  empathy INTEGER, negative INTEGER, url TEXT, article TEXT,
+  UNIQUE (topic_id, platform, author, text)
+);
+CREATE TABLE IF NOT EXISTS reaction_stance (
+  reaction_id INTEGER, statement_id INTEGER, value INTEGER, model TEXT, created_at TEXT,
+  PRIMARY KEY (reaction_id, statement_id)
+);
+CREATE INDEX IF NOT EXISTS reaction_topic ON reaction(topic_id);
+"""
+
+
+def init_reactions() -> None:
+    c = connect()
+    with c:
+        c.executescript(REACTION_DDL)
+    c.close()

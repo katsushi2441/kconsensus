@@ -186,3 +186,64 @@ def sitemap():
 def topic_page(slug: str):
     _topic(slug)
     return FileResponse(HERE / "templates" / "topic.html")
+
+
+@app.get("/api/topic/{slug}/reading")
+def api_reading(slug: str):
+    """ニュースへの反応から**読み取った**賛否。人が押した票とは別に返す。
+
+    これは推定であって投票ではない。画面でも必ず分けて出し、
+    判定のもとになったコメント本文を添える（読み手が自分で確かめられるように）。
+    """
+    t = _topic(slug)
+    c = connect()
+    ids = [r[0] for r in c.execute("SELECT id FROM statement WHERE topic_id=? ORDER BY id", (t["id"],))]
+    texts = {r["id"]: dict(r) for r in c.execute(
+        "SELECT id, text, origin FROM statement WHERE topic_id=?", (t["id"],))}
+    try:
+        rows = [(r["reaction_id"], r["statement_id"], r["value"]) for r in c.execute(
+            """SELECT rs.reaction_id, rs.statement_id, rs.value FROM reaction_stance rs
+               JOIN reaction r ON r.id = rs.reaction_id
+               WHERE r.topic_id=? AND rs.value != 0""", (t["id"],))]
+        n_react = c.execute("SELECT COUNT(*) FROM reaction WHERE topic_id=?", (t["id"],)).fetchone()[0]
+        n_read = c.execute(
+            """SELECT COUNT(*) FROM reaction_stance rs JOIN reaction r ON r.id = rs.reaction_id
+               WHERE r.topic_id=?""", (t["id"],)).fetchone()[0]
+        samples = {}
+        for r in c.execute(
+            """SELECT rs.statement_id, rs.value, r.text, r.author, r.platform, r.empathy, r.negative, r.url
+               FROM reaction_stance rs JOIN reaction r ON r.id = rs.reaction_id
+               WHERE r.topic_id=? AND rs.value != 0 ORDER BY r.empathy DESC""", (t["id"],)):
+            k = (r["statement_id"], r["value"])
+            if len(samples.get(k, [])) < 2:
+                samples.setdefault(k, []).append(
+                    {"text": r["text"], "author": r["author"], "platform": r["platform"],
+                     "empathy": r["empathy"], "negative": r["negative"], "url": r["url"]})
+    except Exception:      # noqa: BLE001  取り込み前は表が無い
+        c.close()
+        return {"ready": False, "note": "反応の読み取りはまだ取り込んでいません"}
+    c.close()
+    if not rows:
+        return {"ready": False, "note": "反応の読み取りはまだ取り込んでいません",
+                "reactions": n_react, "judged": n_read}
+    a = analyze(rows, statement_ids=ids)
+    out = []
+    for s in a.statements:
+        d = texts.get(s.statement_id, {})
+        out.append({"id": s.statement_id, "text": d.get("text", ""), "origin": d.get("origin"),
+                    "read": s.votes, "agree": s.agree, "disagree": s.disagree,
+                    "agree_rate": s.agree_rate, "consensus": s.consensus, "divisive": s.divisive,
+                    "note": s.note,
+                    "samples": {"agree": samples.get((s.statement_id, 1), []),
+                                "disagree": samples.get((s.statement_id, -1), [])}})
+    scored = [x for x in out if x["consensus"] is not None]
+    return {
+        "ready": True, "reactions": n_react, "judged": n_read,
+        "n_readers": a.n_voters, "n_stances": a.n_votes, "n_groups": a.n_groups, "note": a.note,
+        "statements": out,
+        "consensus_top": sorted(scored, key=lambda x: -x["consensus"])[:5],
+        "divisive_top": sorted(scored, key=lambda x: -(x["divisive"] or 0))[:5],
+        "accuracy": {"judge": "gemma4:12b-it-qat",
+                     "measured": "手で正解を付けた20組で 15〜17/20（75〜85%）",
+                     "compared": "jevlocal は 9〜10/20（45〜50%）で採用せず"},
+    }

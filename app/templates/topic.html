@@ -30,6 +30,9 @@
 <h2>いまの結果</h2>
 <div id="res" class="panel"><p class="note" style="margin:0">読み込み中…</p></div>
 
+<h2>ニュースへの反応から読み取った賛否</h2>
+<div id="rd" class="panel"><p class="note" style="margin:0">読み込み中…</p></div>
+
 <h2>出典</h2>
 <p class="note" id="evn"></p>
 <details><summary class="note" style="cursor:pointer;padding:8px 0">出典をすべて開く（国会会議録の発言と、元になったニュース）</summary>
@@ -112,6 +115,48 @@ async function result(){
   $('#res').innerHTML = h;
 }
 load();
+reading();
+
+async function reading(){
+  const d = await (await fetch('../../api/topic/'+slug+'/reading')).json();
+  if(!d.ready){
+    $('#rd').innerHTML = `<p class="note" style="margin:0">${esc(d.note||'まだありません')}</p>`;
+    return;
+  }
+  let h = `<p class="note" style="margin:0 0 .6em"><b>これは投票ではありません。</b>
+    ニュースに実際に寄せられた反応 <b>${d.reactions}件</b>を読んで、
+    「この人はこの論点に賛成か反対か」をAIが判定した<b>推定</b>です。
+    判定器は ${esc(d.accuracy.judge)}、精度は${esc(d.accuracy.measured)}。
+    ${esc(d.accuracy.compared)}。誤りが混ざっている前提でご覧ください。
+    各論点に、もとになったコメント本文を添えています。</p>`;
+  h += `<p class="num">${d.n_readers}人の反応から ${d.n_stances}件の賛否を読み取りました（判定は${d.judged}回）。</p>`;
+  if(d.n_groups==null){
+    h += `<p class="note">${esc(d.note||'意見グループは出せません。')}</p>`;
+  }else{
+    h += `<p class="note">読み取りでは <b>${d.n_groups}つのグループ</b>に分かれました。</p>`;
+    h += `<h3 style="margin:16px 0 .3em">立場が違っても一致した点（読み取り）</h3>
+      <div class="scroll"><table class="gt"><tr><th>論点</th><th>どのグループから見ても賛成</th></tr>`
+      + d.consensus_top.map(s=>`<tr><td>${esc(s.text)}</td><td>${pct(s.consensus)}</td></tr>`).join('')
+      + `</table></div>`;
+    h += `<h3 style="margin:16px 0 .3em">割れている点（読み取り）</h3>
+      <div class="scroll"><table class="gt"><tr><th>論点</th><th>グループ間の開き</th></tr>`
+      + d.divisive_top.map(s=>`<tr><td>${esc(s.text)}</td><td>${pct(s.divisive)}</td></tr>`).join('')
+      + `</table></div>`;
+  }
+  h += `<h3 style="margin:18px 0 .3em">論点ごとの読み取りと、もとのコメント</h3>` + d.statements.map(s=>{
+    if(!s.read) return `<p class="num" style="margin:.5em 0">${esc(s.text)} — 触れている反応がありませんでした</p>`;
+    const t=s.read;
+    const sm = (arr,lab)=> arr.length ? arr.map(c=>`<p class="num" style="margin:.2em 0 .2em 12px;border-left:2px solid var(--line);padding-left:8px">
+        <b>${lab}</b> ${esc(c.text.slice(0,150))}…<br>
+        <span>${esc(c.platform)}・共感${c.empathy.toLocaleString()}${c.url?` ・<a href="${esc(c.url)}" target="_blank" rel="noopener">元のコメント</a>`:''}</span></p>`).join('') : '';
+    return `<div style="margin:.9em 0">
+      <div class="num"><b>${esc(s.text)}</b></div>
+      <div class="bar"><i class="a" style="width:${s.agree/t*100}%"></i><i class="d" style="width:${s.disagree/t*100}%"></i></div>
+      <div class="num">賛成と読み取れた${s.agree}・反対と読み取れた${s.disagree}（触れていた反応${t}件）</div>
+      ${sm(s.samples.agree,'賛成と読み取った例:')}${sm(s.samples.disagree,'反対と読み取った例:')}</div>`;
+  }).join('');
+  $('#rd').innerHTML = h;
+}
 </script>
 </body>
 </html>
