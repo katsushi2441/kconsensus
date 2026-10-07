@@ -93,11 +93,48 @@ def collect(words: list[str]) -> list[dict]:
     return out
 
 
+def collect_x(queries: list[str], since: str, pages: int) -> list[dict]:
+    """X の投稿を fxtwitter の検索（ログイン不要）で集める（2026-10-08 追加）。
+
+    ニュースのコメントは記事を選ばないと数が出ない（子どもとSNSは5本で26件）。X なら同じ話題で数百件ある。
+    リツイート・20字未満は除き、同じ本文は1件にする。いいね数を empathy に入れる。投稿の URL を出典に残す。
+    """
+    import urllib.parse
+    seen, out = set(), []
+    for q in queries:
+        cur = ""
+        for _ in range(pages):
+            u = "https://api.fxtwitter.com/2/search?" + urllib.parse.urlencode(
+                {"q": f"{q} since:{since} lang:ja", **({"cursor": cur} if cur else {})})
+            try:
+                d = json.load(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "kconsensus/1.0"}), timeout=30))
+            except Exception as e:      # noqa: BLE001
+                print(f"  X検索に失敗（{q}）: {str(e)[:80]}")
+                break
+            for t in d.get("results") or []:
+                text = re.sub(r"https?://\S+", "", (t.get("text") or "")).strip()
+                if text.startswith("RT @") or len(text) < 20 or text in seen:
+                    continue
+                seen.add(text)
+                a = t.get("author") or {}
+                out.append({"platform": "X", "author": a.get("screen_name") or "", "text": text[:520],
+                            "empathy": int(t.get("likes") or 0), "negative": 0, "url": t.get("url") or "",
+                            "article": f"Xの投稿（検索: {q}）"})
+            cur = (d.get("cursor") or {}).get("bottom") or ""
+            if not cur:
+                break
+            time.sleep(1.5)
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--slug", required=True)
-    ap.add_argument("--words", nargs="+", required=True, help="記事の題名に含む語")
+    ap.add_argument("--words", nargs="+", default=[], help="記事の題名に含む語")
     ap.add_argument("--limit", type=int, default=0, help="反応の上限（0=全部）")
+    ap.add_argument("--x-query", nargs="+", default=[], help="X の検索語（fxtwitter・ログイン不要）。例: 'SNS 年齢制限'")
+    ap.add_argument("--x-since", default="2026-09-01", help="X の投稿の開始日")
+    ap.add_argument("--x-pages", type=int, default=10, help="X の検索語ごとのページ数（1ページ20件）")
     a = ap.parse_args()
 
     init_db()
@@ -109,7 +146,11 @@ def main() -> None:
     stmts = [dict(r) for r in con.execute(
         "SELECT id, text FROM statement WHERE topic_id=? ORDER BY id", (t["id"],))]
 
-    rs = collect(a.words)
+    rs = collect(a.words) if a.words else []
+    if a.x_query:
+        xs = collect_x(a.x_query, a.x_since, a.x_pages)
+        print(f"  X の投稿 {len(xs)}件")
+        rs += xs
     if a.limit:
         rs = rs[:a.limit]
     print(f"{t['name']}: 反応 {len(rs)}件 × 論点 {len(stmts)}件 = {len(rs) * len(stmts):,}回の読み取り")
