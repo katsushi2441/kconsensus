@@ -22,6 +22,7 @@ import argparse
 import glob
 import json
 import os
+import unicodedata
 import re
 import sys
 import time
@@ -68,7 +69,8 @@ def collect(words: list[str]) -> list[dict]:
             continue
         s = d.get("sources") or {}
         title = ((s.get("yahoo_meta") or {}).get("title") or "")
-        if not any(w in title for w in words):
+        # Yahoo の題名は「ＳＮＳ」のように全角が多いので、そろえてから照らす（2026-10-08）
+        if not any(unicodedata.normalize("NFKC", w) in unicodedata.normalize("NFKC", title) for w in words):
             continue
         for c in (s.get("yahoo_comments") or []):
             txt = re.sub(r"\s+", " ", str(c.get("text") or "")).strip()

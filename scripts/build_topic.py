@@ -17,6 +17,7 @@ import argparse
 import glob
 import json
 import os
+import unicodedata
 import re
 import sqlite3
 import sys
@@ -81,7 +82,9 @@ def news(words: list[str]) -> list[dict]:
         s = d.get("sources") or {}
         yc = s.get("yahoo_comments") or []
         title = ((s.get("yahoo_meta") or {}).get("title") or "")
-        if not yc or not any(w in title for w in words):
+        nt = unicodedata.normalize("NFKC", title)   # Yahoo の題名は「ＳＮＳ」のように全角が多い
+        # トラッカーの語は「子ども SNS」のように空白で区切った AND。空白込みの一致だと題名にまず当たらない（2026-10-08）
+        if not yc or not any(all(unicodedata.normalize("NFKC", tok) in nt for tok in w.split()) for w in words):
             continue
         out.append({"title": title, "url": d.get("url", ""), "comments": yc,
                     "x_replies": s.get("x_replies") or [], "job": os.path.basename(os.path.dirname(f))})
@@ -123,11 +126,12 @@ def main() -> None:
     ap.add_argument("--slug", required=True)
     ap.add_argument("--n", type=int, default=14)
     ap.add_argument("--dry-run", action="store_true", help="DBに書かず、作った論点を表示するだけ")
+    ap.add_argument("--news-words", nargs="+", help="ニュースを題名で選ぶ語（既定はトラッカーの語）。例: SNS禁止 SNS制限")
     a = ap.parse_args()
 
     t = load_tracker(a.tracker)
     sp = speeches(a.tracker)
-    nw = news(t["words"])
+    nw = news(a.news_words or t["words"])
     print(f"材料: 国会発言 {len(sp)}件 / ニュース {len(nw)}件"
           f"（Yahooコメント {sum(len(x['comments']) for x in nw)}件）")
     if not sp and not nw:
