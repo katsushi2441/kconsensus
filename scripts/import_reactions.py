@@ -60,6 +60,24 @@ def judge(comment: str, statement: str) -> str:
     return m.group(0) if m else "none"
 
 
+def on_topic(text: str, topic_name: str, topic_lead: str) -> bool:
+    """X の投稿が論点のテーマについて述べているか（2026-10-08 追加）。
+
+    X は語で拾うので、話題外の投稿が混ざる（「16歳未満」でスウェーデンの少年犯罪の投稿が「禁止に賛成」の例に出た）。
+    テーマに触れていない投稿は、賛否を読む前に外す。迷うものは残す（外しすぎより、触れずと判定されるほうがよい）。
+    """
+    p = (f"テーマ: {topic_name}\n説明: {topic_lead[:300]}\n\n投稿: {text}\n\n"
+         "この投稿は、上のテーマ（子どもや若者のSNS・インターネット利用、その年齢制限・規制・事業者の責任・家庭や学校での扱いなど）"
+         "について、意見・体験・情報を述べていますか。テーマと関係のない話題（別の事件、選挙、広告、宣伝など）なら no。"
+         "yes か no の語だけを1つ出力してください。")
+    body = json.dumps({"model": MODEL, "prompt": p, "stream": False, "think": False,
+                       "options": {"temperature": 0, "num_predict": 4}}).encode()
+    req = urllib.request.Request(f"{OLLAMA}/api/generate", data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=300) as r:
+        t = json.load(r)["response"].strip().lower()
+    return not t.startswith("no")
+
+
 def collect(words: list[str]) -> list[dict]:
     seen, out = set(), []
     for f in glob.glob(os.path.join(KMONTAGE_JOBS, "*", "news_opinions.json")):
@@ -135,6 +153,7 @@ def main() -> None:
     ap.add_argument("--x-query", nargs="+", default=[], help="X の検索語（fxtwitter・ログイン不要）。例: 'SNS 年齢制限'")
     ap.add_argument("--x-since", default="2026-09-01", help="X の投稿の開始日")
     ap.add_argument("--x-pages", type=int, default=10, help="X の検索語ごとのページ数（1ページ20件）")
+    ap.add_argument("--prune-x", action="store_true", help="入っている X の投稿をテーマとの関連で判定し、関係ないものを賛否の読み取りごと消す")
     a = ap.parse_args()
 
     init_db()
@@ -146,11 +165,23 @@ def main() -> None:
     stmts = [dict(r) for r in con.execute(
         "SELECT id, text FROM statement WHERE topic_id=? ORDER BY id", (t["id"],))]
 
+    lead = (con.execute("SELECT lead FROM topic WHERE id=?", (t["id"],)).fetchone()[0]) or ""
+    if a.prune_x:
+        xs_db = con.execute("SELECT id, text FROM reaction WHERE topic_id=? AND platform='X'", (t["id"],)).fetchall()
+        drop = [r[0] for r in xs_db if not on_topic(r[1], t["name"], lead)]
+        with con:
+            for rid in drop:
+                con.execute("DELETE FROM reaction_stance WHERE reaction_id=?", (rid,))
+                con.execute("DELETE FROM reaction WHERE id=?", (rid,))
+        print(f"  X の投稿 {len(xs_db)}件のうち、テーマと関係ない {len(drop)}件を外しました")
+        con.close()
+        return
     rs = collect(a.words) if a.words else []
     if a.x_query:
         xs = collect_x(a.x_query, a.x_since, a.x_pages)
-        print(f"  X の投稿 {len(xs)}件")
-        rs += xs
+        keep = [x for x in xs if on_topic(x["text"], t["name"], lead)]
+        print(f"  X の投稿 {len(xs)}件のうち、テーマに触れている {len(keep)}件")
+        rs += keep
     if a.limit:
         rs = rs[:a.limit]
     print(f"{t['name']}: 反応 {len(rs)}件 × 論点 {len(stmts)}件 = {len(rs) * len(stmts):,}回の読み取り")
