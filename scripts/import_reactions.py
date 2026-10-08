@@ -153,6 +153,8 @@ def main() -> None:
     ap.add_argument("--x-query", nargs="+", default=[], help="X の検索語（fxtwitter・ログイン不要）。例: 'SNS 年齢制限'")
     ap.add_argument("--x-since", default="2026-09-01", help="X の投稿の開始日")
     ap.add_argument("--x-pages", type=int, default=10, help="X の検索語ごとのページ数（1ページ20件）")
+    ap.add_argument("--fill", action="store_true",
+                    help="新しく集めず、入っている反応のうち、まだ読んでいない論点との組だけ読む（論点を足したあと。論点AIマップから渡したとき等）")
     ap.add_argument("--prune-x", action="store_true", help="入っている X の投稿をテーマとの関連で判定し、関係ないものを賛否の読み取りごと消す")
     a = ap.parse_args()
 
@@ -182,12 +184,14 @@ def main() -> None:
         keep = [x for x in xs if on_topic(x["text"], t["name"], lead)]
         print(f"  X の投稿 {len(xs)}件のうち、テーマに触れている {len(keep)}件")
         rs += keep
+    if a.fill:
+        rs = [{"text": row[0]} for row in con.execute("SELECT text FROM reaction WHERE topic_id=?", (t["id"],))]
     if a.limit:
         rs = rs[:a.limit]
     print(f"{t['name']}: 反応 {len(rs)}件 × 論点 {len(stmts)}件 = {len(rs) * len(stmts):,}回の読み取り")
 
     with con:
-        for r in rs:
+        for r in ([] if a.fill else rs):
             con.execute(
                 "INSERT OR IGNORE INTO reaction (topic_id, platform, author, text, empathy, negative, url, article) "
                 "VALUES (?,?,?,?,?,?,?,?)",
