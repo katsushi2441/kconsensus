@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kurage 合意点マップ — 賛否を集めて、意見の割れ方と、それでも一致する点を出す。
+"""Kurage 合意形成AI（合意点マップ） — 賛否を集めて、意見の割れ方と、それでも一致する点を出す。
 
 Pol.is がやっている「合意点の発見」を自前で実装したもの（本体は AGPL-3.0 なので
 fork せず、同じ筋を MIT で書いた。計算は app/polis.py）。
@@ -25,7 +25,7 @@ from .store import connect, init_db
 
 HERE = Path(__file__).resolve().parent
 PUBLIC = os.environ.get("KCONSENSUS_PUBLIC_BASE", "https://kurage.exbridge.jp/kconsensus.php/")
-app = FastAPI(title="Kurage 合意点マップ")
+app = FastAPI(title="Kurage 合意形成AI（合意点マップ）")
 init_db()
 
 

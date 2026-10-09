@@ -1,5 +1,5 @@
 <?php
-// Kurage 合意点マップ (kconsensus) — kurage.exbridge.jp 上の公開入口。
+// Kurage 合意形成AI（合意点マップ） (kconsensus) — kurage.exbridge.jp 上の公開入口。
 // 自宅サーバー :18379 への透過プロキシ。UIは相対パス(api/... ../../style.css)なので
 // /kconsensus.php/ (末尾スラッシュ) を起点に PATH_INFO で中継する。
 // バックエンドURLは同ディレクトリの kconsensus_config.php で定義する(リポジトリには含めない)
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $res = curl_exec($ch);
 if ($res === false) {
     http_response_code(502); header('Content-Type: text/plain; charset=utf-8');
-    echo '合意点マップのバックエンドに接続できません'; exit;
+    echo '合意形成AI（合意点マップ）のバックエンドに接続できません'; exit;
 }
 $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 $hsize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
