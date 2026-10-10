@@ -18,7 +18,7 @@
 
 <div class="panel">
   <h3>この画面がしていること／していないこと</h3>
-  <p class="note" style="margin:0"><b>論点は、国会の実際の発言と、ニュースへの反応から立てています。</b>
+  <p class="note" style="margin:0"><b id="srcnote">論点は、国会の実際の発言と、ニュースへの反応から立てています。</b>
   言い換えはAIがしていますが、意見の中身は作っていません。下の「出典」に、誰のいつの発言かと会議録リンクを出しています。
   <b>合成した票は一切混ぜていません。</b>票が足りないうちは、数字を出さずに「足りない」と書きます。</p>
 </div>
@@ -30,7 +30,7 @@
 <h2>いまの結果</h2>
 <div id="res" class="panel"><p class="note" style="margin:0">読み込み中…</p></div>
 
-<h2>ニュースへの反応から読み取った賛否</h2>
+<h2 id="rdh">ニュースへの反応から読み取った賛否</h2>
 <div id="rd" class="panel"><p class="note" style="margin:0">読み込み中…</p></div>
 
 <h2>出典</h2>
@@ -46,6 +46,9 @@ const slug = location.pathname.replace(/\/$/,'').split('/').pop();
 const $ = s => document.querySelector(s);
 const esc = t => String(t==null?'':t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pct = v => v==null ? '—' : Math.round(v*100)+'%';
+// Kurage 法案AIインタビュー（khouan）から渡された論点は、材料がニュースではなくインタビューの意見
+const KH = slug.startsWith('khouan-');
+const ORIGIN = {diet:'国会の発言から', interview:'AIインタビューの意見から'};
 
 async function load(){
   const d = await (await fetch('../../api/topic/'+slug)).json();
@@ -56,7 +59,7 @@ async function load(){
   $('#done').textContent = d.voted;
   $('#list').innerHTML = d.statements.map(s => `
     <div class="stmt" data-id="${s.id}">
-      <span class="tag ${s.origin==='diet'?'diet':'public'}">${s.origin==='diet'?'国会の発言から':'ニュースへの反応から'}</span>
+      <span class="tag ${s.origin==='diet'?'diet':'public'}">${ORIGIN[s.origin]||'ニュースへの反応から'}</span>
       <p class="q">${esc(s.text)}</p>
       ${s.basis?`<p class="b">もとにしたもの: ${esc(s.basis)}</p>`:''}
       <div class="vote">
@@ -66,10 +69,13 @@ async function load(){
       </div>
     </div>`).join('');
   const nd = d.evidence.filter(e=>e.kind==='diet').length, nn = d.evidence.length - nd;
-  $('#evn').textContent = `国会会議録の発言 ${nd}件と、元になったニュース ${nn}件から論点を立てています。`;
+  $('#evn').textContent = KH ? `国会会議録の発言 ${nd}件と、法案AIインタビューで公開に同意された意見から論点を立てています。`
+    : `国会会議録の発言 ${nd}件と、元になったニュース ${nn}件から論点を立てています。`;
+  if (KH) { $('#rdh').textContent = 'インタビューの意見から読み取った賛否'; }
+  if (KH) { $('#srcnote').textContent = '論点は、法案AIインタビューで公開に同意された意見を話題に分け、話題から立てています。'; }
   $('#ev').innerHTML = d.evidence.map(e => `
     <div class="ev"><b>${esc(e.who)}</b> <span>${esc(e.affiliation||'')} ${esc(e.date||'')}</span><br>
-    ${esc(e.body)}<br>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">${e.kind==='diet'?'会議録を見る':'記事と反応を見る'}</a>`:''}</div>`).join('');
+    ${esc(e.body)}<br>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">${e.kind==='diet'?'会議録を見る':(e.kind==='interview'?'法案とインタビューの意見を見る':'記事と反応を見る')}</a>`:''}</div>`).join('');
   document.querySelectorAll('.stmt .vote button').forEach(b => b.onclick = () => send(b));
   result();
 }
@@ -124,7 +130,7 @@ async function reading(){
     return;
   }
   let h = `<p class="note" style="margin:0 0 .6em"><b>これは投票ではありません。</b>
-    ニュースに実際に寄せられた反応 <b>${d.reactions}件</b>を読んで、
+    ${KH?'法案AIインタビューで公開に同意された意見のまとめ':'ニュースに実際に寄せられた反応'} <b>${d.reactions}件</b>を読んで、
     「この人はこの論点に賛成か反対か」をAIが判定した<b>推定</b>です。
     判定器は ${esc(d.accuracy.judge)}、精度は${esc(d.accuracy.measured)}。
     ${esc(d.accuracy.compared)}。誤りが混ざっている前提でご覧ください。
@@ -148,7 +154,7 @@ async function reading(){
     const t=s.read;
     const sm = (arr,lab)=> arr.length ? arr.map(c=>`<p class="num" style="margin:.2em 0 .2em 12px;border-left:2px solid var(--line);padding-left:8px">
         <b>${lab}</b> ${esc(c.text.slice(0,150))}…<br>
-        <span>${esc(c.platform)}・共感${c.empathy.toLocaleString()}${c.url?` ・<a href="${esc(c.url)}" target="_blank" rel="noopener">元のコメント</a>`:''}</span></p>`).join('') : '';
+        <span>${esc(c.platform)}${c.platform==='AIインタビュー'?'':'・共感'+c.empathy.toLocaleString()}${c.url?` ・<a href="${esc(c.url)}" target="_blank" rel="noopener">${c.platform==='AIインタビュー'?'元のまとめ':'元のコメント'}</a>`:''}</span></p>`).join('') : '';
     return `<div style="margin:.9em 0">
       <div class="num"><b>${esc(s.text)}</b></div>
       <div class="bar"><i class="a" style="width:${s.agree/t*100}%"></i><i class="d" style="width:${s.disagree/t*100}%"></i></div>
